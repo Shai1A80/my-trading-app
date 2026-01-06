@@ -1,45 +1,39 @@
 import streamlit as st
 import yfinance as yf
 
-st.set_page_config(page_title="AI Stock Analyzer", layout="wide")
-st.title("🚀 מנתח מניות: דוחות ופוטנציאל")
+st.set_page_config(page_title="AI Stock Hunter", layout="wide")
+st.title("🏹 צייד המניות: מה כדאי לקנות עכשיו?")
 
-ticker = st.text_input("הכנס סימול מניה (למשל: NVDA, TSLA):", "NVDA").upper()
+# רשימת המניות לסריקה (מניות פריצה וצמיחה חזקות)
+watchlist = ["NVDA", "PLTR", "TSLA", "META", "AMZN", "AMD", "MSFT", "GOOGL"]
 
-if ticker:
-    try:
-        stock = yf.Ticker(ticker)
-        
-        # משיכת נתונים בסיסיים בצורה בטוחה
-        hist = stock.history(period="1d")
-        if not hist.empty:
-            current_price = hist['Close'].iloc[-1]
+st.subheader("🔎 סורק הזדמנויות בשידור חי")
+if st.button("הפעל סריקת שוק"):
+    found_opportunity = False
+    
+    for ticker in watchlist:
+        try:
+            stock = yf.Ticker(ticker)
+            # בדיקת ביצועים ב-24 שעות האחרונות
+            hist = stock.history(period="2d")
+            if len(hist) < 2: continue
             
-            st.header(f"📊 נתונים עבור {ticker}")
-            st.metric("מחיר נוכחי", f"${current_price:.2f}")
+            change = ((hist['Close'].iloc[-1] / hist['Close'].iloc[-2]) - 1) * 100
+            
+            # תנאי ל"הזדמנות": עליה של מעל 2% ביום אחד (סימן לפריצה)
+            if change > 2:
+                found_opportunity = True
+                st.success(f"🔥 **הזדמנות ב-{ticker}**: המניה עולה ב-{change:.2f}%!")
+                st.write(f"מחיר נוכחי: ${hist['Close'].iloc[-1]:.2f}")
+                st.write(f"[קרא חדשות על {ticker}](https://finance.yahoo.com/quote/{ticker})")
+                st.divider()
+        except:
+            continue
+            
+    if not found_opportunity:
+        st.info("כרגע אין פריצות חריגות ברשימת המעקב. השוק רגוע.")
 
-            # ניסיון משיכת נתונים פונדמנטליים
-            info = stock.info
-            st.subheader("💡 ניתוח פוטנציאל ודוחות")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                income = info.get('netIncomeToCommon', 'N/A')
-                st.write(f"**רווח נקי:** {income}")
-            with col2:
-                growth = info.get('revenueGrowth', 0) * 100
-                st.write(f"**צמיחה:** {growth:.1f}%")
-
-            if growth > 15:
-                st.success("🔥 פוטנציאל צמיחה גבוה לפי דוחות אחרונים!")
-            
-            st.subheader("📰 חדשות")
-            news = stock.news
-            if news:
-                for n in news[:2]:
-                    st.write(f"🔹 {n['title']}")
-        else:
-            st.error("לא נמצאו נתונים עבור הסימול הזה.")
-            
-    except Exception as e:
-        st.warning("המערכת מנסה להתחבר לנתונים עמוקים... נסה לרענן בעוד רגע.")
+st.sidebar.header("חיפוש ידני")
+manual_ticker = st.sidebar.text_input("או בדוק מניה ספציפית:")
+if manual_ticker:
+    st.sidebar.write(f"בדוק בנפרד את: {manual_ticker}")
