@@ -1,61 +1,59 @@
 import streamlit as st
 import yfinance as yf
-import requests
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 
-st.set_page_config(page_title="Pro Stock Manager", layout="wide")
-st.title("💼 ניהול תיק וצייד מניות")
+st.set_page_config(page_title="Cloud Portfolio", layout="wide")
+st.title("☁️ תיק השקעות מסונכרן לענן")
 
-# הגדרת מפתח ה-API שלך באופן קבוע בקוד
-AV_API_KEY = "BJYKXIY0BWBSYDDE"
+# חיבור לגיליון גוגל
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df = conn.read(worksheet="Sheet1", ttl="0")
+except:
+    df = pd.DataFrame(columns=['Ticker', 'Price', 'Quantity'])
 
-if 'portfolio' not in st.session_state:
-    st.session_state.portfolio = {}
+tab1, tab2 = st.tabs(["📝 עדכון תיק", "📊 מצב נוכחי"])
 
-tab1, tab2, tab3 = st.tabs(["➕ ניהול תיק", "📊 סל הקניות (רווחים)", "🏹 סורק פריצות"])
-
-# --- טאב 1: הוספה ועדכון מניות ---
 with tab1:
-    st.subheader("הכנס מניה חדשה לסל")
-    c1, c2, c3 = st.columns(3)
-    with c1: t_in = st.text_input("סימול (למשל AMZN):").upper()
-    with c2: p_in = st.number_input("מחיר קנייה ($):", min_value=0.01)
-    with c3: q_in = st.number_input("כמות מניות:", min_value=1, step=1)
-    
-    if st.button("שמור בתיק"):
-        if t_in:
-            st.session_state.portfolio[t_in] = {"price": p_in, "qty": q_in}
-            st.success(f"עודכן: {q_in} מניות של {t_in}")
-
-# --- טאב 2: סל הקניות עם חישובי נטו/ברוטו ---
-with tab2:
-    if not st.session_state.portfolio:
-        st.info("התיק ריק")
-    else:
-        total_invested = 0
-        total_current_value = 0
+    st.subheader("הוספה או עדכון מניה")
+    with st.form("stock_form"):
+        t = st.text_input("סימול (Ticker):").upper()
+        p = st.number_input("מחיר קנייה ($):", min_value=0.01)
+        q = st.number_input("כמות מניות:", min_value=1)
         
-        for ticker, data in st.session_state.portfolio.items():
-            stock = yf.Ticker(ticker)
-            curr_price = stock.fast_info['last_price']
+        if st.form_submit_button("שמור וסנכרן לענן"):
+            new_entry = pd.DataFrame([{"Ticker": t, "Price": p, "Quantity": q}])
+            if t in df['Ticker'].values:
+                df.loc[df['Ticker'] == t, ['Price', 'Quantity']] = [p, q]
+                final_df = df
+            else:
+                final_df = pd.concat([df, new_entry], ignore_index=True)
             
-            invested = data['price'] * data['qty']
-            current_val = curr_price * data['qty']
-            profit_bruto = current_val - invested
-            profit_neto = profit_bruto * 0.75 if profit_bruto > 0 else profit_bruto
+            conn.update(worksheet="Sheet1", data=final_df)
+            st.success(f"נשמר בהצלחה!")
+            st.rerun()
+
+with tab2:
+    if df.empty:
+        st.info("התיק ריק.")
+    else:
+        total_inv = 0
+        total_val = 0
+        for _, row in df.iterrows():
+            s = yf.Ticker(row['Ticker'])
+            curr = s.fast_info['last_price']
+            inv = row['Price'] * row['Quantity']
+            val = curr * row['Quantity']
+            total_inv += inv
+            total_val += val
             
-            total_invested += invested
-            total_current_value += current_val
-            
-            with st.expander(f"📦 {ticker} | רווח ברוטו: ${profit_bruto:.2f}"):
-                col_a, col_b = st.columns(2)
-                col_a.write(f"**הושקע:** ${invested:,.2f} (${data['price']} למניה)")
-                col_b.write(f"**רווח נטו (אחרי מס):** ${profit_neto:.2f}")
+            with st.expander(f"{row['Ticker']} - פרטים"):
+                st.write(f"הושקע: ${inv:,.2f} | שווי: ${val:,.2f}")
 
         st.divider()
-        st.header("💰 סיכום תיק כללי")
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("סך הכל הושקע", f"${total_invested:,.2f}")
-        m2.metric("שווי נוכחי", f"${total_current_value:,.2f}")
-        
-        total_bruto = total_current_value - total_invested
-        total_neto = total_bruto * 0.75 if total_bruto >
+        st.metric("סה''כ מושקע", f"${total_inv:,.2f}")
+        profit = total_val - total_inv
+        # התיקון לשגיאה:
+        neto = profit * 0.75 if profit > 0 else profit
+        st.metric("רווח נטו (אחרי מס)", f"${neto:,.2f}")
