@@ -2,42 +2,44 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(page_title="AI Stock Analyzer", layout="wide")
-st.title("🚀 מנתח מניות: דוחות, פוטנציאל וחדשות")
+st.title("🚀 מנתח מניות: דוחות ופוטנציאל")
 
-ticker = st.text_input("הכנס סימול מניה (למשל: NVDA, PLTR):", "NVDA").upper()
+ticker = st.text_input("הכנס סימול מניה (למשל: NVDA, TSLA):", "NVDA").upper()
 
 if ticker:
-    with st.spinner('מושך נתונים עמוקים...'):
+    try:
         stock = yf.Ticker(ticker)
-        info = stock.info
         
-        # --- 1. נתונים פיננסיים ודוחות ---
-        st.header(f"📊 נתונים עבור {ticker}")
-        col1, col2, col3 = st.columns(3)
-        
-        price = info.get('currentPrice', 0)
-        net_income = info.get('netIncomeToCommon', 0)
-        rev_growth = info.get('revenueGrowth', 0) * 100
-        
-        col1.metric("מחיר נוכחי", f"${price}")
-        col2.metric("צמיחה שנתית", f"{rev_growth:.1f}%")
-        col3.metric("מצב", "✅ רווחית" if net_income > 0 else "❌ מפסידה")
+        # משיכת נתונים בסיסיים בצורה בטוחה
+        hist = stock.history(period="1d")
+        if not hist.empty:
+            current_price = hist['Close'].iloc[-1]
+            
+            st.header(f"📊 נתונים עבור {ticker}")
+            st.metric("מחיר נוכחי", f"${current_price:.2f}")
 
-        # --- 2. ניתוח פוטנציאל ---
-        st.subheader("💡 הערכת פוטנציאל")
-        if rev_growth > 15:
-            st.success("🔥 פוטנציאל צמיחה גבוה לפי הדוחות האחרונים.")
-        else:
-            st.info("🐢 צמיחה יציבה/מתונה.")
+            # ניסיון משיכת נתונים פונדמנטליים
+            info = stock.info
+            st.subheader("💡 ניתוח פוטנציאל ודוחות")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                income = info.get('netIncomeToCommon', 'N/A')
+                st.write(f"**רווח נקי:** {income}")
+            with col2:
+                growth = info.get('revenueGrowth', 0) * 100
+                st.write(f"**צמיחה:** {growth:.1f}%")
 
-        # --- 3. חדשות (עם מנגנון הגנה) ---
-        st.subheader("📰 חדשות אחרונות")
-        try:
+            if growth > 15:
+                st.success("🔥 פוטנציאל צמיחה גבוה לפי דוחות אחרונים!")
+            
+            st.subheader("📰 חדשות")
             news = stock.news
             if news:
-                for n in news[:3]:
-                    st.write(f"🔹 **{n['title']}** ([קרא עוד]({n['link']}))")
-            else:
-                st.write("אין חדשות עדכניות כרגע.")
-        except:
-            st.write("זמנית לא ניתן למשוך חדשות, נסה לרענן בעוד דקה.")
+                for n in news[:2]:
+                    st.write(f"🔹 {n['title']}")
+        else:
+            st.error("לא נמצאו נתונים עבור הסימול הזה.")
+            
+    except Exception as e:
+        st.warning("המערכת מנסה להתחבר לנתונים עמוקים... נסה לרענן בעוד רגע.")
